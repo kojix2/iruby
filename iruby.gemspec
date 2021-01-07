@@ -24,6 +24,5 @@ Gem::Specification.new do |s|
   s.add_dependency 'multi_json', '~> 1.11'
 
   s.add_development_dependency 'minitest'
-  s.add_development_dependency 'pycall', '>= 1.2.1'
   s.add_development_dependency 'rake'
 end
