@@ -2,6 +2,8 @@ require 'ffi-rzmq'
 
 module IRuby
   class Session
+    HEARTBEAT_POLL_TIMEOUT = 100
+
     include SessionSerialize
 
     def initialize(config)
@@ -21,7 +23,30 @@ module IRuby
         begin
           hb_socket = c.socket(ZMQ::REP)
           hb_socket.bind(connection % config['hb_port'])
-          ZMQ::Device.new(hb_socket, hb_socket)
+          poller = ZMQ::Poller.new
+          poller.register_readable(hb_socket)
+          loop do
+            rc = poller.poll(HEARTBEAT_POLL_TIMEOUT)
+            ZMQ::Util.error_check('zmq_poll', rc)
+            next unless poller.readables.include?(hb_socket)
+
+            msg = []
+            loop do
+              frame = ''
+              rc = hb_socket.recv_string(frame, ZMQ::DONTWAIT)
+              break if rc == -1 && ZMQ::Util.errno == ZMQ::EAGAIN
+
+              ZMQ::Util.error_check('zmq_msg_recv', rc)
+              msg << frame
+              break unless hb_socket.more_parts?
+            end
+
+            next if msg.empty?
+
+            msg.each_with_index do |part, i|
+              hb_socket.send_string(part, i == msg.size - 1 ? 0 : ZMQ::SNDMORE)
+            end
+          end
         rescue Exception => e
           IRuby.logger.fatal "Kernel heartbeat died: #{e.message}\n#{e.backtrace.join("\n")}"
         end

@@ -1,6 +1,8 @@
 module IRuby
   module SessionAdapter
     class FfirzmqAdapter < BaseAdapter
+      HEARTBEAT_POLL_TIMEOUT = 100
+
       def self.load_requirements
         require 'ffi-rzmq'
       end
@@ -12,24 +14,42 @@ module IRuby
       end
 
       def recv(sock)
-        msg = []
-        while msg.empty? || sock.more_parts?
-          begin
-            frame = ''
-            rc = sock.recv_string(frame)
-            ZMQ::Util.error_check('zmq_msg_recv', rc)
-            msg << frame
-          rescue
-          end
-        end
-        msg
+        recv_message(sock)
       end
 
       def heartbeat_loop(sock)
-        @heartbeat_device = ZMQ::Device.new(sock, sock)
+        poller = ZMQ::Poller.new
+        poller.register_readable(sock)
+        loop do
+          rc = poller.poll(HEARTBEAT_POLL_TIMEOUT)
+          ZMQ::Util.error_check('zmq_poll', rc)
+          next unless poller.readables.include?(sock)
+
+          msg = recv_message(sock, ZMQ::DONTWAIT)
+          next if msg.empty?
+
+          send(sock, msg)
+        end
       end
 
       private
+
+      def recv_message(sock, flags=0)
+        msg = []
+        loop do
+          frame = ''
+          rc = sock.recv_string(frame, flags)
+          return msg if rc == -1 && ZMQ::Util.errno == ZMQ::EAGAIN
+
+          ZMQ::Util.error_check('zmq_msg_recv', rc)
+          msg << frame
+          break unless sock.more_parts?
+        end
+        msg
+      rescue
+        retry if flags == 0
+        msg
+      end
 
       def make_socket(type, protocol, host, port)
         case type
