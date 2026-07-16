@@ -92,9 +92,9 @@ module IRuby
     def switch_backend!(backend)
       name = case backend
              when String, Symbol
-               name = backend.downcase
+               backend.downcase
              else
-               name = backend
+               backend
              end
 
       backend_class = case name
