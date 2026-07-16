@@ -104,7 +104,7 @@ module IRuby
       when :unregister
         unregister_kernel(@sub_argv)
       when :console
-        exec_jupyter(@sub_cmd.to_s, @sub_argv)
+        exec_jupyter(@sub_argv)
       when :kernel
         @sub_app = KernelApplication.new(@sub_argv)
         @sub_app.run
@@ -336,7 +336,7 @@ module IRuby
       params
     end
 
-    def exec_jupyter(sub_cmd, argv)
+    def exec_jupyter(argv)
       opts = OptionParser.new
       opts.banner = "Usage: #{$PROGRAM_NAME} unregister [options]"
 
